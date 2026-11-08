@@ -21,7 +21,7 @@ function casca(ativa, html) {
   app.innerHTML = `
   <header class="topo">
     <img src="${escuro ? 'logo-dark.svg' : 'logo-light.svg'}" alt="Rota Particular" />
-    <button class="icon-btn" data-tema aria-label="Tema">${escuro ? I.sun : I.moon}</button>
+    <button class="icon-btn" data-troca-tema aria-label="Tema">${escuro ? I.sun : I.moon}</button>
   </header>
   <main>${html}</main>
   <nav class="bar"><div class="in">
@@ -32,7 +32,7 @@ function casca(ativa, html) {
     <button data-go="/ajustes" class="${ativa === 'aj' ? 'on' : ''}">${I.cog}Ajustes</button>
   </div></nav>`;
   $$('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
-  $('[data-tema]').addEventListener('click', () => { tema.set(escuro ? 'light' : 'dark'); aplicaTema(); render(); });
+  $('[data-troca-tema]').addEventListener('click', () => { tema.set(escuro ? 'light' : 'dark'); aplicaTema(); render(); });
   $$('[data-voltar]').forEach((b) => b.addEventListener('click', () => history.back()));
   window.scrollTo(0, 0);
 }
