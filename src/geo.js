@@ -9,9 +9,20 @@ export async function posicaoAtual() {
 
 // Com o CapacitorHttp ligado, o fetch sai pelo Android (sem bloqueio de CORS) e leva um User-Agent
 // que identifica o app, como o OpenStreetMap exige.
+export let ultimoErro = '';
 const get = async (url) => {
-  const r = await fetch(url, { headers: { Accept: 'application/json', 'Accept-Language': 'pt-BR', 'User-Agent': 'RotaParticular/1.0 (app Android de motorista)' } });
-  if (!r.ok) throw new Error('Falha de rede (' + r.status + ')');
+  ultimoErro = '';
+  let r;
+  try {
+    r = await fetch(url, { headers: { Accept: 'application/json', 'Accept-Language': 'pt-BR', 'User-Agent': 'RotaParticular/1.0 (app Android de motorista)' } });
+  } catch (e) {
+    ultimoErro = 'sem conexão com ' + new URL(url).hostname;
+    throw new Error(ultimoErro);
+  }
+  if (!r.ok) {
+    ultimoErro = 'erro ' + r.status + ' em ' + new URL(url).hostname;
+    throw new Error(ultimoErro);
+  }
   return r.json();
 };
 

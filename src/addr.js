@@ -1,6 +1,6 @@
 import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 import { I, esc, toast } from './ui.js';
-import { buscar } from './geo.js';
+import { buscar, ultimoErro } from './geo.js';
 
 let vozOk = null;
 async function temVoz() {
@@ -41,7 +41,7 @@ export function campoEndereco({ valor = '', placeholder = 'Endereço, bairro ou 
     sug.style.display = ''; sug.innerHTML = '<div class="vazio">Buscando…</div>';
     const itens = await buscar(txt, ctx?.() || {});
     if (meu !== seq) return;
-    mostra(itens, itens.erro ? 'A busca de endereços não respondeu. Confira a internet e tente de novo.' : 'Nada encontrado. Tente incluir o bairro ou o nome do lugar.');
+    mostra(itens, itens.erro ? 'A busca não respondeu (' + (ultimoErro || 'sem detalhe') + '). Confira a internet e tente de novo.' : 'Nada encontrado. Tente incluir o bairro ou o nome do lugar.');
   };
 
   inp.addEventListener('input', () => {
