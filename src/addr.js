@@ -13,12 +13,18 @@ async function temVoz() {
 export function campoEndereco({ valor = '', placeholder = 'Endereço, bairro ou local', mic = false, ctx, onPick, onClear }) {
   const wrap = document.createElement('div');
   wrap.className = 'end-wrap';
-  wrap.innerHTML = `<div class="ln">${I.pin}<input type="text" autocomplete="off" placeholder="${esc(placeholder)}" value="${esc(valor)}"><button type="button" class="icon-btn" data-x style="display:none">${I.x}</button>${mic ? `<button type="button" class="icon-btn" data-mic style="display:none">${I.mic}</button>` : ''}</div><div class="sug" style="display:none"></div>`;
+  wrap.innerHTML = `<div class="ln">${I.pin}<input type="text" inputmode="text" enterkeyhint="search" autocapitalize="sentences" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="${esc(placeholder)}" value="${esc(valor)}"><button type="button" class="icon-btn" data-x style="display:none">${I.x}</button>${mic ? `<button type="button" class="icon-btn" data-mic style="display:none">${I.mic}</button>` : ''}</div><div class="sug" style="display:none"></div>`;
   const inp = wrap.querySelector('input');
   const sug = wrap.querySelector('.sug');
   const bx = wrap.querySelector('[data-x]');
   const bm = wrap.querySelector('[data-mic]');
   let timer, seq = 0;
+  // Garante o teclado: tocar em qualquer parte da linha (menos nos botões) foca o campo
+  wrap.querySelector('.ln').addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    inp.focus();
+    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch { /* ignora */ }
+  });
 
   const atualizaBotoes = () => {
     bx.style.display = inp.value ? '' : 'none';

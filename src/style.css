@@ -95,3 +95,6 @@ nav.bar .fab { position: relative; } nav.bar .fab i { position: absolute; left: 
 /* Mapa grátis (OpenStreetMap) escurecido por filtro no tema escuro */
 .mapa-escuro .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.55); }
 .duas{align-items:end}.duas label.campo{font-size:13px}
+
+.end-wrap input { -webkit-user-select: text; user-select: text; -webkit-tap-highlight-color: transparent; position: relative; z-index: 1; min-width: 0; }
+.end-wrap .ln { min-height: 56px; }
