@@ -133,7 +133,8 @@ function viewNova() {
   mapa?.remove();
   mapa = L.map('mapa', { zoomControl: false, attributionControl: true }).setView([-20.4697, -54.6201], 12);
   const escuro = tema.get() === 'dark';
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${escuro ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, { maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap © CARTO' }).addTo(mapa);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapa);
+  $('#mapa').classList.toggle('mapa-escuro', escuro);
   let camada = L.layerGroup().addTo(mapa);
   const desenha = () => {
     camada.clearLayers();

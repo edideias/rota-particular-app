@@ -92,4 +92,6 @@ nav.bar .fab { position: relative; } nav.bar .fab i { position: absolute; left: 
 .vazio-msg { text-align: center; color: var(--suave); padding: 40px 10px; }
 .aviso { font-size: 13px; color: var(--suave); margin-top: 10px; }
 .leaflet-container { font-family: inherit; }
+/* Mapa grátis (OpenStreetMap) escurecido por filtro no tema escuro */
+.mapa-escuro .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.55); }
 .duas{align-items:end}.duas label.campo{font-size:13px}
