@@ -1,0 +1,6 @@
+{
+  "appId": "app.rotaparticular.motorista",
+  "appName": "Rota Particular",
+  "webDir": "dist",
+  "android": { "allowMixedContent": false }
+}

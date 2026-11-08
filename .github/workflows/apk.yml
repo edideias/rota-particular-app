@@ -1,0 +1,58 @@
+name: Gerar APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Testar lógica (Pix e tarifa)
+        run: node test/logic.test.mjs
+
+      - name: Compilar o app web
+        run: npm run build
+
+      - name: Sincronizar com o Android
+        run: npx cap sync android
+
+      - name: Compilar o APK
+        working-directory: android
+        run: ./gradlew assembleRelease -Pvc=${{ github.run_number }} --no-daemon
+
+      - name: Renomear o APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk rota-particular.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rota-particular-apk
+          path: rota-particular.apk
+
+      - name: Publicar release com link direto
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Rota Particular v${{ github.run_number }}
+          body: Baixe o arquivo rota-particular.apk e instale no celular.
+          files: rota-particular.apk
+          make_latest: true

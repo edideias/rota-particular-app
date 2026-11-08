@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Rota Particular</string>
+    <string name="title_activity_main">Rota Particular</string>
+    <string name="package_name">app.rotaparticular.motorista</string>
+    <string name="custom_url_scheme">app.rotaparticular.motorista</string>
+</resources>
