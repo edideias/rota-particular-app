@@ -2,5 +2,12 @@
   "appId": "app.rotaparticular.motorista",
   "appName": "Rota Particular",
   "webDir": "dist",
-  "android": { "allowMixedContent": false }
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
 }

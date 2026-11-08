@@ -7,8 +7,10 @@ export async function posicaoAtual() {
   return { lat: p.coords.latitude, lon: p.coords.longitude };
 }
 
+// Com o CapacitorHttp ligado, o fetch sai pelo Android (sem bloqueio de CORS) e leva um User-Agent
+// que identifica o app, como o OpenStreetMap exige.
 const get = async (url) => {
-  const r = await fetch(url);
+  const r = await fetch(url, { headers: { Accept: 'application/json', 'Accept-Language': 'pt-BR', 'User-Agent': 'RotaParticular/1.0 (app Android de motorista)' } });
   if (!r.ok) throw new Error('Falha de rede (' + r.status + ')');
   return r.json();
 };
@@ -46,6 +48,7 @@ export async function buscar(texto, { cidade, uf, outraCidade, perto } = {}) {
   const centro = outraCidade ? null : perto || (await centroDaCidade(cidade, uf));
   const bias = centro ? `&lat=${centro.lat}&lon=${centro.lon}` : '';
   const consulta = !outraCidade && cidade && !q.toLowerCase().includes(cidade.toLowerCase()) ? `${q} ${cidade}` : q;
+  let falhou = 0;
   try {
     const d = await get(`https://photon.komoot.io/api/?limit=6&lang=default&q=${encodeURIComponent(consulta)}${bias}`);
     const itens = (d.features || [])
@@ -58,11 +61,15 @@ export async function buscar(texto, { cidade, uf, outraCidade, perto } = {}) {
         return { label, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
       });
     if (itens.length) return itens;
-  } catch { /* cai no Nominatim */ }
+  } catch { falhou++; /* cai no Nominatim */ }
   try {
     const d = await get(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=br&accept-language=pt-BR&q=${encodeURIComponent(consulta)}`);
     return d.map((x) => ({ label: x.display_name.split(',').slice(0, 4).join(','), lat: +x.lat, lon: +x.lon }));
-  } catch { return []; }
+  } catch {
+    const vazio = [];
+    vazio.erro = true;
+    return vazio;
+  }
 }
 
 // Rota pelas ruas (OSRM). pontos = [{lat,lon}, ...]

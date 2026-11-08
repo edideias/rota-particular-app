@@ -41,7 +41,7 @@ export function campoEndereco({ valor = '', placeholder = 'Endereço, bairro ou 
     sug.style.display = ''; sug.innerHTML = '<div class="vazio">Buscando…</div>';
     const itens = await buscar(txt, ctx?.() || {});
     if (meu !== seq) return;
-    mostra(itens, 'Nada encontrado. Tente incluir o bairro ou o nome do lugar.');
+    mostra(itens, itens.erro ? 'A busca de endereços não respondeu. Confira a internet e tente de novo.' : 'Nada encontrado. Tente incluir o bairro ou o nome do lugar.');
   };
 
   inp.addEventListener('input', () => {
