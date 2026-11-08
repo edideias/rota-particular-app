@@ -10,7 +10,7 @@ async function temVoz() {
 }
 
 // Campo de endereço com sugestões. ctx() devolve { cidade, uf, outraCidade, perto }
-export function campoEndereco({ valor = '', placeholder = 'Endereço, bairro ou local', mic = false, ctx, onPick, onClear }) {
+export function campoEndereco({ buscaFn, valor = '', placeholder = 'Endereço, bairro ou local', mic = false, ctx, onPick, onClear }) {
   const wrap = document.createElement('div');
   wrap.className = 'end-wrap';
   wrap.innerHTML = `<div class="ln">${I.pin}<input type="text" inputmode="text" enterkeyhint="search" autocapitalize="sentences" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="${esc(placeholder)}" value="${esc(valor)}"><button type="button" class="icon-btn" data-x style="display:none">${I.x}</button>${mic ? `<button type="button" class="icon-btn" data-mic style="display:none">${I.mic}</button>` : ''}</div><div class="sug" style="display:none"></div>`;
@@ -36,7 +36,7 @@ export function campoEndereco({ valor = '', placeholder = 'Endereço, bairro ou 
   const fecha = () => { sug.style.display = 'none'; sug.innerHTML = ''; };
   const mostra = (itens, vazio) => {
     sug.style.display = '';
-    sug.innerHTML = itens.length ? itens.map((it, i) => `<button type="button" data-i="${i}">${esc(it.label)}</button>`).join('') : `<div class="vazio">${vazio}</div>`;
+    sug.innerHTML = itens.length ? itens.map((it, i) => `<button type="button" data-i="${i}">${it.titulo ? `<b>${esc(it.titulo)}</b><small>${esc(it.sub || '')}</small>` : esc(it.label)}</button>`).join('') : `<div class="vazio">${vazio}</div>`;
     sug.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
       const it = itens[+b.dataset.i];
       inp.value = it.label; atualizaBotoes(); fecha(); onPick?.(it);
@@ -45,7 +45,7 @@ export function campoEndereco({ valor = '', placeholder = 'Endereço, bairro ou 
   const pesquisa = async (txt) => {
     const meu = ++seq;
     sug.style.display = ''; sug.innerHTML = '<div class="vazio">Buscando…</div>';
-    const itens = await buscar(txt, ctx?.() || {});
+    const itens = await (buscaFn ? buscaFn(txt).catch(() => { const e = []; e.erro = true; return e; }) : buscar(txt, ctx?.() || {}));
     if (meu !== seq) return;
     mostra(itens, itens.erro ? 'A busca não respondeu (' + (ultimoErro || 'sem detalhe') + '). Confira a internet e tente de novo.' : 'Nada encontrado. Tente incluir o bairro ou o nome do lugar.');
   };

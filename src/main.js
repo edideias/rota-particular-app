@@ -5,7 +5,7 @@ import './style.css';
 import { cfg, clientes, corridas, tema, uid, exportar, importar } from './store.js';
 import { MODOS, modoAutomatico, calcularValor, brl } from './pricing.js';
 import { gerarPix } from './pix.js';
-import { posicaoAtual, reverso, rota } from './geo.js';
+import { posicaoAtual, reverso, rota, buscarCidade } from './geo.js';
 import { campoEndereco } from './addr.js';
 import { I, esc, $, $$, toast, abrirUrl, compartilhar, copiar, zap, dataBR, mesmoDia, modal, soDigitos } from './ui.js';
 
@@ -96,6 +96,8 @@ function viewNova() {
     </div>
     <div class="modos" id="modos"></div>
     <div class="card">
+      <button class="cidade-btn" id="cidade" type="button"><div>${I.pin.replace('<svg','<svg width="20" height="20" style="vertical-align:-4px;margin-right:6px"')}<b id="cidTxt"></b></div><span>trocar cidade</span></button>
+      <div id="cidBox" class="cidade-box"></div>
       <div class="topo-campo"><b>Origem</b><button class="mini" id="gps">${I.gps}GPS</button></div>
       <div id="orig"></div>
       <div id="paradas"></div>
@@ -114,7 +116,16 @@ function viewNova() {
     <button class="btn" id="gerar">Gerar QR Code Pix</button>
     <p class="aviso">Rota e distância calculadas com dados do OpenStreetMap; podem diferir um pouco do Google. Você pode ajustar o valor à mão.</p>`);
 
-  const ctxBusca = () => ({ cidade: c.cidade, uf: c.uf, outraCidade: nova.outraCidade, perto: nova.origem });
+  if (!nova.cidade) { nova.cidade = c.cidade; nova.uf = c.uf; }
+  const pintaCidade = () => { $('#cidTxt').textContent = [nova.cidade, nova.uf].filter(Boolean).join(', ') || 'Escolher cidade'; };
+  pintaCidade();
+  const ctxBusca = () => ({ cidade: nova.cidade, uf: nova.uf, outraCidade: nova.outraCidade, perto: nova.origem });
+  $('#cidade').addEventListener('click', () => {
+    const box = $('#cidBox');
+    if (box.firstChild) { box.innerHTML = ''; return; }
+    const f = campoEndereco({ placeholder: 'Digite a cidade', buscaFn: buscarCidade, onPick: (p) => { nova.cidade = p.cidade; nova.uf = p.uf; nova.destino = null; nova.rota = null; viewNova(); } });
+    box.appendChild(f.el); f.el.querySelector('input').focus();
+  });
 
   const pintaModos = () => {
     $('#modos').innerHTML = MODOS.map((m) => `<button class="chip ${nova.modo === m.id ? 'on' : ''}" data-m="${m.id}">${m.sigla}</button>`).join('');
@@ -177,6 +188,7 @@ function viewNova() {
       const pos = await posicaoAtual();
       const end = await reverso(pos);
       nova.origem = { label: end.label, lat: pos.lat, lon: pos.lon };
+      if (!nova.cidade && end.cidade) { nova.cidade = end.cidade; nova.uf = end.uf; pintaCidade(); }
       origem.set(end.label); calcula(); desenha();
     } catch { origem.set(''); toast('Não consegui pegar o GPS. Ative a localização.'); }
   };
