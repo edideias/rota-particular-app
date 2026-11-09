@@ -5,7 +5,7 @@ import './style.css';
 import { cfg, clientes, corridas, tema, uid, exportar, importar } from './store.js';
 import { MODOS, modoAutomatico, calcularValor, brl } from './pricing.js';
 import { gerarPix } from './pix.js';
-import { posicaoAtual, reverso, rota, buscarCidade } from './geo.js';
+import { posicaoAtual, reverso, rota, buscarCidade, ultimoErro } from './geo.js';
 import { campoEndereco } from './addr.js';
 import { I, esc, $, $$, toast, abrirUrl, compartilhar, copiar, zap, dataBR, mesmoDia, modal, soDigitos } from './ui.js';
 
@@ -119,11 +119,11 @@ function viewNova() {
   if (!nova.cidade) { nova.cidade = c.cidade; nova.uf = c.uf; }
   const pintaCidade = () => { $('#cidTxt').textContent = [nova.cidade, nova.uf].filter(Boolean).join(', ') || 'Escolher cidade'; };
   pintaCidade();
-  const ctxBusca = () => ({ cidade: nova.cidade, uf: nova.uf, outraCidade: nova.outraCidade, perto: nova.origem });
+  const ctxBusca = () => ({ centro: nova.cidadeEscolhida ? nova.centro : (nova.gps || nova.origem || nova.centro), cidade: nova.cidade, uf: nova.uf, outraCidade: nova.outraCidade });
   $('#cidade').addEventListener('click', () => {
     const box = $('#cidBox');
     if (box.firstChild) { box.innerHTML = ''; return; }
-    const f = campoEndereco({ placeholder: 'Digite a cidade', buscaFn: buscarCidade, onPick: (p) => { nova.cidade = p.cidade; nova.uf = p.uf; nova.destino = null; nova.rota = null; viewNova(); } });
+    const f = campoEndereco({ placeholder: 'Digite a cidade', buscaFn: buscarCidade, onPick: (p) => { nova.cidade = p.cidade; nova.uf = p.uf; nova.centro = { lat: p.lat, lon: p.lon }; nova.cidadeEscolhida = true; nova.destino = null; nova.rota = null; viewNova(); } });
     box.appendChild(f.el); f.el.querySelector('input').focus();
   });
 
@@ -187,7 +187,9 @@ function viewNova() {
       origem.set('Buscando GPS…');
       const pos = await posicaoAtual();
       const end = await reverso(pos);
+      nova.gps = { lat: pos.lat, lon: pos.lon };
       nova.origem = { label: end.label, lat: pos.lat, lon: pos.lon };
+      if (end.falhou) toast('Não consegui o endereço da origem (' + (ultimoErro || 'sem resposta') + '). Digite a rua ou toque no GPS de novo.');
       if (!nova.cidade && end.cidade) { nova.cidade = end.cidade; nova.uf = end.uf; pintaCidade(); }
       origem.set(end.label); calcula(); desenha();
     } catch { origem.set(''); toast('Não consegui pegar o GPS. Ative a localização.'); }

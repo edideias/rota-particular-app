@@ -29,22 +29,34 @@ const get = async (url) => {
 const partes = (a) => a.filter(Boolean).join(', ');
 
 export async function reverso({ lat, lon }) {
+  const coord = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  const erros = [];
   try {
-    const d = await get(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lon}`);
+    const d = await get(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=pt-BR&lat=${lat}&lon=${lon}`);
     const a = d.address || {};
-    const rua = a.road || a.pedestrian || a.footway || '';
-    const label = partes([partes([rua, a.house_number].filter(Boolean).join(', ')), a.suburb || a.neighbourhood, a.city || a.town || a.village]);
-    return { label: label || d.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`, lat, lon, cidade: a.city || a.town || a.village || '', uf: (a['ISO3166-2-lvl4'] || '').replace('BR-', '') };
-  } catch { /* tenta o Photon */ }
+    const rua = a.road || a.pedestrian || a.footway || a.residential || '';
+    const cidade = a.city || a.town || a.village || a.municipality || '';
+    const via = partes([rua, a.house_number]);
+    const label = partes([via, a.suburb || a.neighbourhood || a.quarter, cidade]);
+    if (label) return { label, lat, lon, cidade, uf: (a['ISO3166-2-lvl4'] || '').replace('BR-', ''), rua: !!rua };
+  } catch { erros.push(ultimoErro); }
   try {
-    const d = await get(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&lang=default`);
+    const d = await get(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`);
     const p = d.features?.[0]?.properties;
     if (p) {
       const cidade = p.city || p.county || '';
-      return { label: partes([partes([p.street || p.name, p.housenumber].filter(Boolean).join(', ')), p.district || p.locality, cidade]), lat, lon, cidade, uf: p.state || '' };
+      const rua = p.street || p.name || '';
+      const label = partes([partes([rua, p.housenumber]), p.district || p.locality, cidade]);
+      if (label) return { label, lat, lon, cidade, uf: p.state || '', rua: !!rua };
     }
-  } catch { /* usa coordenadas */ }
-  return { label: `${lat.toFixed(5)}, ${lon.toFixed(5)}`, lat, lon, cidade: '', uf: '' };
+  } catch { erros.push(ultimoErro); }
+  try {
+    const d = await get(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=pt`);
+    const cidade = d.city || d.locality || '';
+    if (cidade) return { label: partes([d.locality && d.locality !== cidade ? d.locality : '', cidade]) + ' (rua não identificada)', lat, lon, cidade, uf: d.principalSubdivisionCode ? d.principalSubdivisionCode.replace('BR-', '') : d.principalSubdivision || '', rua: false };
+  } catch { erros.push(ultimoErro); }
+  ultimoErro = erros.filter(Boolean).join(' · ');
+  return { label: coord, lat, lon, cidade: '', uf: '', rua: false, falhou: true };
 }
 
 let centroCache = {};
@@ -71,35 +83,49 @@ const daPhoton = (f) => {
 };
 const soBR = (f) => (f.properties.countrycode || '').toUpperCase() === 'BR';
 
-// Sugestões enquanto digita: primeiro o que está na cidade escolhida (inclusive empresas e locais),
-// depois o restante do Brasil. Nunca resultados de outros países.
-export async function buscar(texto, { cidade, uf, outraCidade, perto } = {}) {
+const km = (a, b) => {
+  const r = Math.PI / 180, dl = (b.lat - a.lat) * r, dn = (b.lon - a.lon) * r;
+  const h = Math.sin(dl / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+};
+const daNominatim = (x) => {
+  const pt = x.display_name.split(',').map((s) => s.trim());
+  const a = x.address || {};
+  const cidade = a.city || a.town || a.village || a.municipality || '';
+  return { titulo: pt[0], sub: partes([...pt.slice(1, 3), cidade && !pt.includes(cidade) ? cidade : '']), label: pt.slice(0, 4).join(', '), lat: +x.lat, lon: +x.lon, cidade, local: !!x.name && x.type !== 'residential' && x.class !== 'highway' };
+};
+
+// Sugestões enquanto digita: primeiro o que está perto de quem busca (sua cidade), do mais perto ao mais
+// longe, com empresas/locais em destaque; depois o resto do Brasil. Nunca resultados de outros países.
+export async function buscar(texto, { centro, cidade, uf, outraCidade } = {}) {
   const q = texto.trim();
   if (q.length < 3) return [];
-  const centro = (await centroDaCidade(cidade, uf)) || perto;
-  const bias = centro ? `&lat=${centro.lat}&lon=${centro.lon}` : '';
+  const c = centro || (await centroDaCidade(cidade, uf));
+  const bias = c ? `&lat=${c.lat}&lon=${c.lon}` : '';
   const base = `https://photon.komoot.io/api/?lang=default&q=${encodeURIComponent(q)}${bias}`;
-  const bbox = centro && !outraCidade ? `&bbox=${centro.lon - 0.3},${centro.lat - 0.25},${centro.lon + 0.3},${centro.lat + 0.25}` : '';
-  const lista = async (url) => ((await get(url)).features || []).filter(soBR).map(daPhoton).filter((x) => x.titulo);
-  let local = [], nacional = [], falhou = 0;
+  const caixa = c && !outraCidade ? [c.lon - 0.3, c.lat - 0.25, c.lon + 0.3, c.lat + 0.25] : null;
+  const fotons = async (url) => ((await get(url)).features || []).filter(soBR).map(daPhoton).filter((x) => x.titulo);
+  let perto = [], pais = [], falhas = 0;
   await Promise.all([
-    bbox ? lista(`${base}&limit=10${bbox}`).then((r) => { local = r; }).catch(() => { falhou++; }) : null,
-    lista(`${base}&limit=8`).then((r) => { nacional = r; }).catch(() => { falhou++; }),
+    caixa ? fotons(`${base}&limit=15&bbox=${caixa.join(',')}`).then((r) => { perto.push(...r); }).catch(() => { falhas++; }) : null,
+    caixa ? get(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=10&addressdetails=1&countrycodes=br&accept-language=pt-BR&viewbox=${caixa[0]},${caixa[3]},${caixa[2]},${caixa[1]}&bounded=1&q=${encodeURIComponent(q)}`)
+      .then((r) => { perto.push(...r.map(daNominatim)); }).catch(() => { falhas++; }) : null,
+    fotons(`${base}&limit=10`).then((r) => { pais = r; }).catch(() => { falhas++; }),
   ]);
-  // empresas/locais primeiro, depois ruas; sempre dentro da cidade antes do resto
-  local.sort((a, b) => (b.local ? 1 : 0) - (a.local ? 1 : 0));
+  const dist = (x) => (c ? km(c, x) : 0);
+  // do mais perto ao mais longe; empresa/local ganha uma folga de 1,5 km
+  const ordena = (l) => l.sort((a, b) => (dist(a) - (a.local ? 1.5 : 0)) - (dist(b) - (b.local ? 1.5 : 0)));
   const visto = new Set(); const itens = [];
-  [...local, ...(outraCidade ? nacional : nacional.filter((x) => !cidade || (x.cidade && x.cidade !== cidade)))].forEach((x) => {
-    if (visto.has(x.label)) return; visto.add(x.label); itens.push(x);
-  });
+  const add = (x) => {
+    const k = (x.titulo + '|' + Math.round(x.lat * 500) + '|' + Math.round(x.lon * 500)).toLowerCase();
+    if (visto.has(k)) return; visto.add(k);
+    if (c) { const d = dist(x); x.sub = partes([x.sub, d < 100 ? `${d < 10 ? d.toFixed(1) : Math.round(d)} km` : '']); }
+    itens.push(x);
+  };
+  ordena(perto).forEach(add);
+  ordena(pais).forEach(add);
   if (itens.length) return itens.slice(0, 8);
-  try {
-    const vb = bbox ? `&viewbox=${centro.lon - 0.3},${centro.lat + 0.25},${centro.lon + 0.3},${centro.lat - 0.25}&bounded=1` : '';
-    const d = await get(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&countrycodes=br&accept-language=pt-BR${vb}&q=${encodeURIComponent(q)}`);
-    return d.map((x) => { const pt = x.display_name.split(',').slice(0, 4); return { titulo: pt[0], sub: pt.slice(1).join(',').trim(), label: pt.join(','), lat: +x.lat, lon: +x.lon }; });
-  } catch {
-    const vazio = []; vazio.erro = true; return vazio;
-  }
+  const vazio = []; vazio.erro = falhas >= (caixa ? 3 : 1); return vazio;
 }
 
 // Busca de cidades (para o botão de cidade/estado)
