@@ -71,15 +71,19 @@ export async function centroDaCidade(cidade, uf) {
   return null;
 }
 
-// Converte um resultado do Photon em sugestão. Empresas/locais aparecem com o nome em destaque.
+// Cada sugestão tem: titulo (o local, ou a rua com número), sub (bairro e cidade) e label (endereço completo).
+// Se houver empresa/local, ele vem primeiro; senão, a rua/avenida com o número e, logo abaixo, o bairro.
+const monta = ({ nome, rua, num, bairro, cidade, estado, ehLocal, lat, lon }) => {
+  const via = rua ? rua + (num ? `, ${num}` : '') : '';
+  const titulo = ehLocal && nome ? nome : (via || nome || '');
+  const sub = partes([ehLocal && via ? via : '', bairro, cidade]);
+  return { titulo, sub, label: partes([titulo, ehLocal && via ? via : '', bairro, cidade]), lat, lon, cidade, estado, local: !!(ehLocal && nome), rua: !!rua, num: !!num };
+};
 const daPhoton = (f) => {
   const p = f.properties;
-  const rua = p.street || '';
-  const num = p.housenumber ? `, ${p.housenumber}` : '';
-  const ehLocal = p.name && p.name !== p.street && !(p.osm_key === 'place' || p.osm_key === 'highway');
-  const titulo = ehLocal ? p.name : (p.street ? rua + num : p.name || '');
-  const sub = partes([ehLocal && rua ? rua + num : '', p.district || p.locality || (p.osm_key === 'place' ? '' : ''), p.city || p.county, p.state]);
-  return { titulo, sub, label: partes([titulo, sub]), lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], cidade: p.city || p.county || '', local: ehLocal };
+  const ehVia = p.osm_key === 'highway' || p.osm_key === 'place';
+  const ehLocal = !!p.name && p.name !== p.street && !ehVia;
+  return monta({ nome: p.name, rua: p.street || (p.osm_key === 'highway' ? p.name : ''), num: p.housenumber, bairro: p.district || p.locality || '', cidade: p.city || p.county || '', estado: p.state || '', ehLocal, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
 };
 const soBR = (f) => (f.properties.countrycode || '').toUpperCase() === 'BR';
 
@@ -89,10 +93,11 @@ const km = (a, b) => {
   return 12742 * Math.asin(Math.sqrt(h));
 };
 const daNominatim = (x) => {
-  const pt = x.display_name.split(',').map((s) => s.trim());
   const a = x.address || {};
-  const cidade = a.city || a.town || a.village || a.municipality || '';
-  return { titulo: pt[0], sub: partes([...pt.slice(1, 3), cidade && !pt.includes(cidade) ? cidade : '']), label: pt.slice(0, 4).join(', '), lat: +x.lat, lon: +x.lon, cidade, local: !!x.name && x.type !== 'residential' && x.class !== 'highway' };
+  const rua = a.road || a.pedestrian || a.footway || a.residential || '';
+  const ehVia = x.class === 'highway' || x.class === 'place' || x.class === 'boundary';
+  const nome = x.name || a.amenity || a.shop || a.tourism || a.building || '';
+  return monta({ nome, rua, num: a.house_number, bairro: a.suburb || a.neighbourhood || a.city_district || a.quarter || '', cidade: a.city || a.town || a.village || a.municipality || '', estado: a.state || '', ehLocal: !!nome && !ehVia && nome !== rua, lat: +x.lat, lon: +x.lon });
 };
 
 // Sugestões enquanto digita: primeiro o que está perto de quem busca (sua cidade), do mais perto ao mais
@@ -113,13 +118,19 @@ export async function buscar(texto, { centro, cidade, uf, outraCidade } = {}) {
     fotons(`${base}&limit=10`).then((r) => { pais = r; }).catch(() => { falhas++; }),
   ]);
   const dist = (x) => (c ? km(c, x) : 0);
+  // número digitado ("Alagoas 396"): vai junto da rua quando o mapa não tem o número exato
+  const digitado = (q.match(/(?:^|[\s,])(?:n[º°o.]*\s*)?(\d{1,5})\s*$/i) || [])[1];
   // do mais perto ao mais longe; empresa/local ganha uma folga de 1,5 km
   const ordena = (l) => l.sort((a, b) => (dist(a) - (a.local ? 1.5 : 0)) - (dist(b) - (b.local ? 1.5 : 0)));
   const visto = new Set(); const itens = [];
   const add = (x) => {
-    const k = (x.titulo + '|' + Math.round(x.lat * 500) + '|' + Math.round(x.lon * 500)).toLowerCase();
+    const k = (x.titulo + '|' + x.sub).toLowerCase();
     if (visto.has(k)) return; visto.add(k);
-    if (c) { const d = dist(x); x.sub = partes([x.sub, d < 100 ? `${d < 10 ? d.toFixed(1) : Math.round(d)} km` : '']); }
+    if (digitado && x.rua && !x.num && !x.local) {
+      x.titulo = `${x.titulo}, ${digitado}`;
+      x.label = partes([x.titulo, ...x.sub.split(', ')]);
+    }
+    if (c) { const d = dist(x); x.sub = partes([x.sub, d < 60 ? `${d < 10 ? d.toFixed(1) : Math.round(d)} km` : partes([x.estado])]); }
     itens.push(x);
   };
   ordena(perto).forEach(add);
